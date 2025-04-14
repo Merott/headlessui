@@ -87,6 +87,7 @@ export function handleIOSLocking(): ScrollLockStep<ContainerMetadata> {
               // but still allow pinch-to-zoom.
               d.style(e.target, 'touchAction', 'pinch-zoom')
             }
+            delete e.target.dataset.initialDistance
           }
         })
 
@@ -96,6 +97,28 @@ export function handleIOSLocking(): ScrollLockStep<ContainerMetadata> {
           (e) => {
             // Check if we are scrolling inside any of the allowed containers, if not let's cancel the event!
             if (e.target instanceof HTMLElement) {
+              if (e.touches.length === 2) {
+                const [touch1, touch2] = e.touches
+                const currentDistance = Math.hypot(
+                  touch2.clientX - touch1.clientX,
+                  touch2.clientY - touch1.clientY
+                )
+
+                if (!e.target.dataset.initialDistance) {
+                  e.target.dataset.initialDistance = currentDistance.toString()
+                  return
+                }
+
+                const initialDistance = parseFloat(e.target.dataset.initialDistance)
+                const distanceChange = currentDistance - initialDistance
+
+                if (isFinite(distanceChange) && Math.abs(distanceChange) > 5) {
+                  return
+                }
+              } else if (e.touches.length === 1 && e.target.dataset.initialDistance) {
+                delete e.target.dataset.initialDistance
+              }
+
               // Some inputs like `<input type=range>` use touch events to
               // allow interaction. We should not prevent this event.
               if (e.target.tagName === 'INPUT') {
@@ -149,6 +172,18 @@ export function handleIOSLocking(): ScrollLockStep<ContainerMetadata> {
           },
           { passive: false }
         )
+
+        d.addEventListener(doc, 'touchend', (e) => {
+          if (e.target instanceof HTMLElement) {
+            delete e.target.dataset.initialDistance
+          }
+        })
+
+        d.addEventListener(doc, 'touchcancel', (e) => {
+          if (e.target instanceof HTMLElement) {
+            delete e.target.dataset.initialDistance
+          }
+        })
 
         // Restore scroll position if a scrollToElement was captured.
         d.add(() => {
